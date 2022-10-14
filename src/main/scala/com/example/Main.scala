@@ -36,10 +36,7 @@ object Routes {
   private val example: Resource[IO, HttpRoutes[IO]] =
     SimpleRestJsonBuilder.routes(HelloWorldImpl).resource
 
-  private val docs: HttpRoutes[IO] =
-    smithy4s.http4s.swagger.docs[IO](HelloWorldService)
-
-  val all: Resource[IO, HttpRoutes[IO]] = example.map(_ <+> docs)
+  val all: Resource[IO, HttpRoutes[IO]] = example
 }
 
 object Main extends IOApp.Simple {
@@ -95,10 +92,10 @@ object Main extends IOApp.Simple {
         .withHost(host"0.0.0.0")
         .withHttpApp(routes.orNotFound)
         .build
-//      _ <- helloTwice(hs).toResource
+     _ <- helloTwice(hs).toResource
 //      _ <- hello2Twice(hs).toResource
 //      _ <- helloThenHello2(hs).toResource
-      _ <- hello2ThenHello(hs).toResource
+      // _ <- hello2ThenHello(hs).toResource
     } yield ()
 
   }.use_
