@@ -5,11 +5,14 @@ import cats.effect._
 import cats.implicits._
 import cats.effect.syntax.resource._
 import org.http4s.ember.server._
+import org.http4s.blaze.server._
 import org.http4s._
 import com.comcast.ip4s._
 import smithy4s.http4s.SimpleRestJsonBuilder
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.client.Client
+import org.http4s.server.middleware.{Logger => ServerLogger}
+import org.http4s.client.middleware.{Logger => ClientLogger}
 
 object HelloWorldImpl extends HelloWorldService[IO] {
 
@@ -33,6 +36,11 @@ object HelloWorldImpl extends HelloWorldService[IO] {
 }
 
 object Routes {
+
+  HttpRoutes.of[IO] {
+    case _ => IO(Response[IO]().withEntity("Hello"))
+  }
+
   private val example: Resource[IO, HttpRoutes[IO]] =
     SimpleRestJsonBuilder.routes(HelloWorldImpl).resource
 
@@ -54,7 +62,11 @@ object Main extends IOApp.Simple {
   val client = EmberClientBuilder.default[IO].build.map { client =>
     SimpleRestJsonBuilder(HelloWorldService)
       .clientResource(
-        authMiddleware(client),
+        ClientLogger(
+          true,
+          true,
+          logAction = Some((x: String) => IO.println(s"client: $x"))
+        )(client),
         Uri.unsafeFromString("http://127.0.0.1:9000")
       )
   }
@@ -86,15 +98,27 @@ object Main extends IOApp.Simple {
   val run = (client, Routes.all).tupled.flatMap { case (client, routes) =>
     for {
       hs <- client
-      _ <- EmberServerBuilder
-        .default[IO]
-        .withPort(port"9000")
-        .withHost(host"0.0.0.0")
-        .withHttpApp(routes.orNotFound)
-        .build
-     _ <- helloTwice(hs).toResource
-//      _ <- hello2Twice(hs).toResource
-//      _ <- helloThenHello2(hs).toResource
+      _ <- BlazeServerBuilder
+        .apply[IO]
+        .bindLocal(9000)
+        .withHttpApp(ServerLogger(true, true, cats.arrow.FunctionK.id[IO], logAction = Some((x:String) => IO.println(s"server: $x")))(routes.orNotFound))
+        .resource
+      // _ <- EmberServerBuilder
+      //   .default[IO]
+      //   .withPort(port"9000")
+      //   .withHost(host"0.0.0.0")
+      //   .withHttpApp(
+      //     ServerLogger(
+      //       true,
+      //       true,
+      //       cats.arrow.FunctionK.id[IO],
+      //       logAction = Some((x: String) => IO.println(s"server: $x"))
+      //     )(routes.orNotFound)
+      //   )
+      //   .build
+      _ <- helloTwice(hs).toResource
+      // _ <- hello2Twice(hs).toResource
+      // _ <- helloThenHello2(hs).toResource
       // _ <- hello2ThenHello(hs).toResource
     } yield ()
 
